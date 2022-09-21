@@ -4,28 +4,28 @@ import groovy.time.*
 String getVersionNum() { return "0.0.1" }
 String getVersionLabel() { return "Environmental Comfort, version ${getVersionNum()}" }
 ArrayList getSetPoints(String name) { 
-	def setpoints = [ "neutral_pvm": ["Cooling neutral temperature","Heating neutral temperature"],
-				 "utci": ["Neutral temperature"],
-				 "ashrae55": ["Neutral temperature"],
-				 "ashrae55_conditioned": ["Neutral temperature"],
-				 "en15251": ["Neutral temperature"],
-				 "en15251_conditioned": ["Neutral temperature"]
-				]
-	return setpoints.get(name)
+    def setpoints = [ "neutral_pvm": ["Cooling neutral temperature","Heating neutral temperature"],
+                 "utci": ["Neutral temperature"],
+                 "ashrae55": ["Neutral temperature"],
+                 "ashrae55_conditioned": ["Neutral temperature"],
+                 "en15251": ["Neutral temperature"],
+                 "en15251_conditioned": ["Neutral temperature"]
+                ]
+    return setpoints.get(name)
 }
 
 definition(
-	name: 			"Environmental Comfort",
-	namespace: 		"env_comfort",
-	author: 		"Matt Groeninger",
-	description: 	"Sets temperature sensor based on different environmental options.",
-	iconUrl: 		"",
-	iconX2Url: 		"",
-	singleInstance:	false
+    name:             "Environmental Comfort",
+    namespace:         "env_comfort",
+    author:         "Matt Groeninger",
+    description:     "Sets temperature sensor based on different environmental options.",
+    iconUrl:         "",
+    iconX2Url:         "",
+    singleInstance:    false
 )
 
 preferences {
-	page(name: "mainPage")
+    page(name: "mainPage")
     page(name: "comfort")
 }
 
@@ -33,14 +33,14 @@ def mainPage() {
     def units = getTemperatureScale()
 
 
-	dynamicPage(name: "mainPage", title: "${getVersionLabel()}", nextPage: "comfort", uninstall: true) {
-      	String defaultLabel = "Environmental Comfort"
-    	section(title: "<b>General</b>") {
-       	    label(title: "Name", required: true, defaultValue: defaultLabel)
+    dynamicPage(name: "mainPage", title: "${getVersionLabel()}", nextPage: "comfort", uninstall: true) {
+          String defaultLabel = "Environmental Comfort"
+        section(title: "<b>General</b>") {
+               label(title: "Name", required: true, defaultValue: defaultLabel)
             if (!app.label) {
-				app.updateLabel(defaultLabel)
-				state.appDisplayName = defaultLabel
-			}
+                app.updateLabel(defaultLabel)
+                state.appDisplayName = defaultLabel
+            }
             input "logging", "enum", title: "Log Level", required: false, defaultValue: "INFO", options: ["TRACE", "DEBUG", "INFO", "WARN", "ERROR"]
         }
         def h_outdoors = null
@@ -96,7 +96,7 @@ def mainPage() {
                 t_outdoors = settings.outdoor_temp.currentTemperature
                 h_outdoors = getOutdoorHumidity()
                 def pressure = get_pressure()
-                def pressure_message = " and the atmospheric pressure (as ${pressure.method}) is ${pressure.atmos * 0.01} kPa."
+                def pressure_message = " and the atmospheric pressure (as ${pressure.method}) is ${pressure.atmos * 0.01} hPa."
                 paragraph "The current outdoor temperature from device ${outdoor_temp.displayName} is ${t_outdoors}°${units} and the relative humidity is ${h_outdoors}%${pressure_message}"
             }
         }
@@ -130,9 +130,9 @@ def mainPage() {
 
 def comfort() {
     def coolPmv = [
-			(-1.0): 'Very cool (-1.0)',
-			(-0.5): 'Cool (-0.5)',
-			0.0: 'Slightly cool (0.0)',
+            (-1.0): 'Very cool (-1.0)',
+            (-0.5): 'Cool (-0.5)',
+            0.0: 'Slightly cool (0.0)',
             0.5: 'Comfortable (0.5)',
             0.64: 'Eco (0.64)',
             0.8: 'Slightly warm (0.8)',
@@ -140,9 +140,9 @@ def comfort() {
             'custom': 'Custom'
     ]
     def heatPmv = [
-			1.0: 'Very warm (1.0)',
-			0.5: 'Warm (0.5)',
-			0.0: 'Slightly warm (0.0)',
+            1.0: 'Very warm (1.0)',
+            0.5: 'Warm (0.5)',
+            0.0: 'Slightly warm (0.0)',
             (-0.5): 'Comfortable (-0.5)',
             (-0.64): 'Eco (-0.64)',
             (-1.0): 'Slightly cool (-1.0)',
@@ -437,48 +437,53 @@ def indoor_configured() {
 
 
 void installed() {
-	LOG("Installed with settings: ${settings}", 4, null, 'trace')
-	initialize()
+    LOG("Installed with settings: ${settings}", 4, null, 'trace')
+    initialize()
 }
 def uninstalled() {
-	log.debug "Uninstalled app"
+    log.debug "Uninstalled app"
     deleteAllChildDevices()
 }
 
 def deleteAllChildDevices() {
-	for (device in getChildDevices())
-	{
-		deleteChildDevice(device.deviceNetworkId)
-	}	
+    for (device in getChildDevices())
+    {
+        deleteChildDevice(device.deviceNetworkId)
+    }    
 }
 
 void updated() {
-	state.version = getVersionLabel()
-	LOG("Updated with settings: ${settings}", 4, null, 'trace')
-	unsubscribe()
+    state.version = getVersionLabel()
+    LOG("Updated with settings: ${settings}", 4, null, 'trace')
+    unsubscribe()
     unschedule()
     initialize()
 }
 
 def initialize() {
-	LOG("${getVersionLabel()} Initializing...", 2, "", 'info')
+    LOG("${getVersionLabel()} Initializing...", 2, "", 'info')
     createChildDevices()
     buildSubscriptions()
-	state.last = "${app.label} was (re)initialized"
+    state.last = "${app.label} was (re)initialized"
     runIn(2, changeSetpoints, [overwrite: true])
     hourlyTempUpdater()
-	runEvery1Hour(hourlyTempUpdater)
-	return
+    runEvery1Hour(hourlyTempUpdater)
+    return
 }
 
 def buildSubscriptions() {
+    log.debug "Building subscriptions"
     if (outdoor_configured()) {
+        log.debug "Subscribing to outdoor_temp currentTemperature"
         subscribe(settings.outdoor_temp, 'currentTemperature', outdoorTempChangeHandler)
+        log.debug "Subscribing to outdoor_humidity currentHumidity"
         subscribe(settings.outdoor_humidity, 'currentHumidity', outdoorHumidityChangeHandler)
         if (settings?.outdoor_pressure) {
+            log.debug "Subscribing to outdoor_pressure ${settings.pressure_attribute}"
             subscribe(settings.outdoor_pressure, settings.pressure_attribute, outdoorPressureChangeHandler)
-        } 
-      
+        } else {
+            log.debug "Not subscribing to outdoor_pressure."
+        }
     }
     if (indoor_configured()) {
         subscribe(settings.indoorThermostat, 'currentTemperature', indoorTempChangeHandler)
@@ -489,17 +494,17 @@ def buildSubscriptions() {
 }
 
 def createChildDevices(){
-	log.debug "Adding Child Devices if not already added"
+    log.debug "Adding Child Devices if not already added"
     for (i in getSetPoints(settings.comfort_method)) {
-    	try {
+        try {
             def name = settings.indoorThermostat.label+" "+i
-        	log.debug "Trying to create child sensor if it doesn't already exist ${name}"
+            log.debug "Trying to create child sensor if it doesn't already exist ${name}"
             def currentchild = getChildDevice(name)
             if (currentchild == null) {
-            	log.debug "Creating child for ${i}"
+                log.debug "Creating child for ${i}"
                 currentchild = addChildDevice("hubitat", "Virtual Temperature Sensor", name, null, [name: "${name}", isComponent: true])
             } else {
-            	log.debug "Found child for ${name}"
+                log.debug "Found child for ${name}"
                 log.debug "${currentchild}"
             }
         } catch (e) {
@@ -561,38 +566,48 @@ def hourlyTempUpdater() {
 
 def indoorHumidityChangeHandler(evt) {
     log.debug "Running event handler (Indoor humidity) for event ${evt} (${evt.numberValue})."
-	if (evt.numberValue != null) {
-		changeSetpoints()
+    if (evt.numberValue != null) {
+        state.last = evt
+        changeSetpoints()
     }
+    log.debug "Finished event handler."
+    return null
 }
 
 def indoorTempChangeHandler(evt) {
     log.debug "Running event handler (Indoor temp) for event ${evt} (${evt.numberValue})."
-	if (evt.numberValue != null) {
-		state.last = evt
-		changeSetpoints()
+    if (evt.numberValue != null) {
+        changeSetpoints()
     }
+    log.debug "Finished event handler."
+    return null
 }
 def outdoorTempChangeHandler(evt) {
     log.debug "Running event handler (outdoor temp) for event ${evt} (${evt.numberValue})."
-	if (evt.numberValue != null) {
-		state.last = evt
-		changeSetpoints()
+    if (evt.numberValue != null) {
+        state.last = evt
+        changeSetpoints()
     }
+    log.debug "Finished event handler."
+    return null
 }
 def outdoorHumidityChangeHandler(evt) {
     log.debug "Running event handler (outdoor humidity) for event ${evt} (${evt.numberValue})."
-	if (evt.numberValue != null) {
-		state.last = evt
-		changeSetpoints()
+    if (evt.numberValue != null) {
+        state.last = evt
+        changeSetpoints()
     }
+    log.debug "Finished event handler."
+    return null
 }
 def outdoorPressureChangeHandler(evt) {
     log.debug "Running event handler (outdoor pressure) for event ${evt} (${evt.numberValue})."
-	if (evt.numberValue != null) {
-		state.last = evt
-		changeSetpoints()
+    if (evt.numberValue != null) {
+        state.last = evt
+        changeSetpoints()
     }
+    log.debug "Finished event handler."
+    return null
 }
 
 def calculateNeutral(String comfort_method, Boolean useOperativeTemp, BigDecimal adaptive_condition) {
@@ -645,88 +660,106 @@ void changeSetpoints() {
     comfort = calculateNeutral(settings.comfort_method, settings.useOperativeTemp, settings.adaptive_condition)
     state.neutral = comfort
     for (i in getSetPoints(settings.comfort_method)) {
+        log.debug "Checking for comfort method ${settings.comfort_method} (working on ${i})."
         if (i == "Cooling neutral temperature") {
-                temp = convert_temp_if_needed(comfort.cooling)
+                temp = round(convert_temp_if_needed(comfort.cooling),1)
         } else {
-                temp = convert_temp_if_needed(comfort.heating)
+                temp = round(convert_temp_if_needed(comfort.heating),1)
         }
-    	try {
-            def name = settings.indoorThermostat.label+" "+i
-            def currentchild = getChildDevice(name)
-            if (currentchild) {
-                if (currentchild.currentTemperature as BigDecimal != temp as BigDecimal) {
-                    log.debug "Found child device ${currentchild}, sending event for temperature reading ${temp} not matching ${currentchild.currentTemperature}"
-                    currentchild.sendEvent(name: "temperature", value: temp, unit: units, isStateChange: true)
-                } else {
-                    log.debug "Found child device ${currentchild}, temperature reading ${temp} matches ${currentchild.currentTemperature}"
-                }
-            }
+        def name = settings.indoorThermostat.label+" "+i
+        def currentchild = false
+        try {
+            currentchild = getChildDevice(name)
         } catch (e) {
             log.debug "Error finding child ${name}: ${e}"
+        }
+        if (currentchild) {
+            if (currentchild.currentTemperature as BigDecimal != temp as BigDecimal) {
+                log.debug "Found child device ${currentchild}, sending event for temperature reading ${temp} not matching ${currentchild.currentTemperature}"
+                currentchild.sendEvent(name: "temperature", value: temp, unit: units, isStateChange: true)
+            } else {
+                log.debug "Found child device ${currentchild}, temperature reading ${temp} matches ${currentchild.currentTemperature}, no need to update."
+            }
         }
     }
 }
 
+def round( ArrayList value, decimals=0 ) {
+    def sum
+    log.trace "Rounding: Arraylist ${value}"
+    value.each {sum += it}
+    return (sum == null) ? null : round((sum/value.size).toBigDecimal(),decimals)
+}
+
 def round( value, decimals=0 ) {
-	return (value == null) ? null : round(value.toBigDecimal(),decimals)
+    log.trace "Rounding: ${value}"
+    return (value == null) ? null : round(value.toBigDecimal(),decimals)
 }
 def round( BigDecimal value, decimals=0) {
+    log.trace "Rounding: ${value}"
     return (value == null) ? null : value.setScale(decimals, BigDecimal.ROUND_HALF_UP)
 }
 
 def getIndoorHumidity() {
-	if (!settings.indoorHumidistat) return false
-	if (settings.indoorHumidistat.size() == 1) 	return settings.indoorHumidistat[0].currentHumidity
-	
-	def tempList = settings.indoorHumidistat.currentHumidity
-	switch(settings.multiHumidRead) {
-		case 'average':
-			return round( (tempList.sum() / tempList.size()), 0)
-			break;
-		case 'lowest':
-			return tempList.min()
-			break;
-		case 'highest':
-			return tempList.max()
-			break;
-	}
+    if (!settings.indoorHumidistat) return false
+    if (settings.indoorHumidistat.size() == 1)     return settings.indoorHumidistat[0].currentHumidity
+    
+    def tempList = settings.indoorHumidistat.currentHumidity
+    switch(settings.multiHumidRead) {
+        case 'average':
+            return round( (tempList.sum() / tempList.size()), 0)
+            break;
+        case 'lowest':
+            return tempList.min()
+            break;
+        case 'highest':
+            return tempList.max()
+            break;
+    }
 }
 
 def getOutdoorHumidity() {
-	if (!settings.outdoor_humidity) return false
-	return settings.outdoor_humidity.currentHumidity
+    if (!settings.outdoor_humidity) return false
+    return settings.outdoor_humidity.currentHumidity
 }
 
-/*					
+/*                    
 def getMultiThermometers() {
-	if (!settings.thermometers) 			return settings.indoorThermostat.currentTemperature
-	if (settings.thermometers.size() == 1) 	return settings.thermostats[0].currentTemperature
-	
-	def tempList = settings.thermometers.currentTemperature
-	def result
-	switch(settings.multiTempType) {
-		case 'average':
-			return round( (tempList.sum() / tempList.size()), (getTemperatureScale()=='C'?2:1))
-			break;
-		case 'lowest':
-			return tempList.min()
-			break;
-		case 'highest':
-			return tempList.max()
-			break;
-	}
+    if (!settings.thermometers)             return settings.indoorThermostat.currentTemperature
+    if (settings.thermometers.size() == 1)     return settings.thermostats[0].currentTemperature
+    
+    def tempList = settings.thermometers.currentTemperature
+    def result
+    switch(settings.multiTempType) {
+        case 'average':
+            return round( (tempList.sum() / tempList.size()), (getTemperatureScale()=='C'?2:1))
+            break;
+        case 'lowest':
+            return tempList.min()
+            break;
+        case 'highest':
+            return tempList.max()
+            break;
+    }
 }
 */
 
 // Helper Functions
                     
 void LOG(message, level=3, child=null, logType="debug", event=true, displayEvent=true) {
-	String msg = "${atomicState.appDisplayName} ${message}"
+    String msg = "${atomicState.appDisplayName} ${message}"
     if (logType == null) logType = 'debug'
     log."${logType}" message
 }
 
 def get_sensorpressure() {
+    if (settings.pressure_sensor_type == 'none') {
+        app.removeSetting('outdoor_pressure')
+        app.removeSetting('pressure_attribute')
+    }
+    log.debug "pressure_sensor_type: ${settings.pressure_sensor_type}"
+    log.debug "outdoor_pressure: ${settings?.outdoor_pressure}"
+    log.debug "pressure_attribute: ${settings?.pressure_attribute}"
     if (settings.pressure_sensor_type != 'none' && settings?.outdoor_pressure && settings?.pressure_attribute) {
        return settings.outdoor_pressure.currentValue("${settings.pressure_attribute}")*100
     }
@@ -850,6 +883,14 @@ def get_UTCI_index() {
     } else {
         return false
     }
+}
+
+def calculateCoolSetpoint() {
+    return getNeutralTempPMV(0,true)
+}
+
+def calculateHeatSetpoint() {
+    return getNeutralTempPMV(1,true)
 }
 
 def getNeutralTempPMV(season=0,Boolean operative = false) {
@@ -1340,7 +1381,7 @@ def universal_thermal_climate_index(t_a, t_r, vel, v_p){
     if (!check) {
         D_t_r = t_r - t_a
         //convert vapour pressure to kPa
-        v_p = v_p / 1000
+        v_p = v_p / 10
         
         UTCI_approx = (t_a +
             (0.607562052) +
