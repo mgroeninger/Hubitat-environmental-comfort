@@ -3,6 +3,7 @@ import groovy.time.*
 
 String getVersionNum() { return "0.0.1" }
 String getVersionLabel() { return "Environmental Comfort, version ${getVersionNum()}" }
+String appName() { return "Environmental Comfort"}
 ArrayList getSetPoints(String name) { 
     def setpoints = [ "neutral_pvm": ["Cooling neutral temperature","Heating neutral temperature"],
                  "utci": ["Neutral temperature"],
@@ -15,13 +16,14 @@ ArrayList getSetPoints(String name) {
 }
 
 definition(
-    name:             "Environmental Comfort",
+    name:              appName(),
     namespace:         "env_comfort",
-    author:         "Matt Groeninger",
-    description:     "Sets temperature sensor based on different environmental options.",
-    iconUrl:         "",
+    author:            "Matt Groeninger",
+    description:       "Sets temperature sensor based on different environmental options.",
+    iconUrl:           "",
     iconX2Url:         "",
-    singleInstance:    false
+    singleInstance:    false,
+    singleThreaded:    true
 )
 
 preferences {
@@ -34,7 +36,7 @@ def mainPage() {
 
 
     dynamicPage(name: "mainPage", title: "${getVersionLabel()}", nextPage: "comfort", uninstall: true) {
-          String defaultLabel = "Environmental Comfort"
+          String defaultLabel = appName()
         section(title: "<b>General</b>") {
                label(title: "Name", required: true, defaultValue: defaultLabel)
             if (!app.label) {
@@ -93,7 +95,7 @@ def mainPage() {
 */
         section(title: "<b>Outdoor measurements</b>" ) {
             if (outdoor_configured()) {
-                t_outdoors = settings.outdoor_temp.currentTemperature
+                t_outdoors = settings.outdoor_temp.currentTemperature as BigDecimal
                 h_outdoors = getOutdoorHumidity()
                 def pressure = get_pressure()
                 def pressure_message = " and the atmospheric pressure (as ${pressure.method}) is ${pressure.atmos * 0.01} hPa."
@@ -183,9 +185,9 @@ def comfort() {
     def units = getTemperatureScale()
 
     def indoor_metrics = getPsycoMetrics(false)
-    log.debug "indoor metrics: ${indoor_metrics}"
+    log("indoor metrics: ${indoor_metrics}","debug")
     def outdoor_metrics = getPsycoMetrics()
-    log.debug "outdoor metrics: ${outdoor_metrics}"
+    log("outdoor metrics: ${outdoor_metrics}","debug")
     def t_operative = round(calc_operative_temp(indoor_metrics.drybulb,outdoor_metrics.drybulb,settings.radiant_adjustment),1)
 
     def t_meanr = indoor_metrics.iWBGT as BigDecimal
@@ -299,10 +301,10 @@ def comfort() {
                         def displayError = false
                         if (settings.manualFill)  {
                             def current_t = convert_temp_if_needed(outdoor_metrics.drybulb)
-                            log.debug "Populating with temperature ${}"
+                            log("Populating with temperature ${current_t}","debug")
                             val = [].withEagerDefault() { current_t as BigDecimal }
                             test = val[167]
-                            log.debug "Built ${val}"
+                            log("Built ${val}","debug")
                             state.temp_history = val
                             app.updateSetting("histText", [type: "string", value: ""])
                             app.updateSetting("manualFill", [type: "bool", value: false])
@@ -311,7 +313,7 @@ def comfort() {
                             tempArray = settings.histText.replace(" ", "").split(',')
                             if (tempArray.length == 168) {
                                 state.temp_history = tempArray
-                                log.debug "Overwriting temperature data with ${tempArray}."
+                                log("Overwriting temperature data with ${tempArray}.","debug")
                                 app.updateSetting("histText", [type: "string", value: ""])
                             } else {
                                 displayError = "Invalid historical temperature data entered. Counted ${tempArray.length} entries."
@@ -323,11 +325,11 @@ def comfort() {
                             if (state.temp_history) {
                                 paragraph "The current historical temperature data being used is: <br/> ${state.temp_history}"
                                 celsius_temps = convert_temp_to_Celsius(state.temp_history)
-                                log.trace "Current temperature list (in C) is :${celsius_temps}"
+                                log("Current temperature list (in C) is :${celsius_temps}","trace")
                                 tList_p_hourly = weighted_running_mean_hourly(celsius_temps,0.8)
-                                log.debug "Weighted running mean hourly results: ${tList_p_hourly}"
+                                log("Weighted running mean hourly results: ${tList_p_hourly}","debug")
                                 tList_p_daily = weighted_running_mean_daily(celsius_temps,0.8)
-                                log.debug "Weighted running mean daily results: ${tList_p_daily}"
+                                log("Weighted running mean daily results: ${tList_p_daily}","debug")
                                 t_p = tList_p_hourly[-1]
                                 def temp_bounds_message = ''
                                 if (t_p < 10 ) {
@@ -434,14 +436,13 @@ def indoor_configured() {
     return false
 }
 
-
-
 void installed() {
-    LOG("Installed with settings: ${settings}", 4, null, 'trace')
+    log("Installed with settings: ${settings}",'trace')
     initialize()
 }
+
 def uninstalled() {
-    log.debug "Uninstalled app"
+    log("Uninstalled app","debug")
     deleteAllChildDevices()
 }
 
@@ -454,14 +455,14 @@ def deleteAllChildDevices() {
 
 void updated() {
     state.version = getVersionLabel()
-    LOG("Updated with settings: ${settings}", 4, null, 'trace')
+    log("Updated with settings: ${settings}",'trace')
     unsubscribe()
     unschedule()
     initialize()
 }
 
 def initialize() {
-    LOG("${getVersionLabel()} Initializing...", 2, "", 'info')
+    log("${getVersionLabel()} Initializing...", 'info')
     createChildDevices()
     buildSubscriptions()
     state.last = "${app.label} was (re)initialized"
@@ -472,17 +473,17 @@ def initialize() {
 }
 
 def buildSubscriptions() {
-    log.debug "Building subscriptions"
+    log("Building subscriptions","debug")
     if (outdoor_configured()) {
-        log.debug "Subscribing to outdoor_temp currentTemperature"
+        log("Subscribing to outdoor_temp currentTemperature","debug")
         subscribe(settings.outdoor_temp, 'currentTemperature', outdoorTempChangeHandler)
-        log.debug "Subscribing to outdoor_humidity currentHumidity"
+        log("Subscribing to outdoor_humidity currentHumidity","debug")
         subscribe(settings.outdoor_humidity, 'currentHumidity', outdoorHumidityChangeHandler)
         if (settings?.outdoor_pressure) {
-            log.debug "Subscribing to outdoor_pressure ${settings.pressure_attribute}"
+            log("Subscribing to outdoor_pressure ${settings.pressure_attribute}","debug")
             subscribe(settings.outdoor_pressure, settings.pressure_attribute, outdoorPressureChangeHandler)
         } else {
-            log.debug "Not subscribing to outdoor_pressure."
+            log("Not subscribing to outdoor_pressure.","debug")
         }
     }
     if (indoor_configured()) {
@@ -494,21 +495,21 @@ def buildSubscriptions() {
 }
 
 def createChildDevices(){
-    log.debug "Adding Child Devices if not already added"
+    log("Adding Child Devices if not already added","debug")
     for (i in getSetPoints(settings.comfort_method)) {
         try {
             def name = settings.indoorThermostat.label+" "+i
-            log.debug "Trying to create child sensor if it doesn't already exist ${name}"
+            log("Trying to create child sensor if it doesn't already exist ${name}","debug")
             def currentchild = getChildDevice(name)
             if (currentchild == null) {
-                log.debug "Creating child for ${i}"
+                log("Creating child for ${i}","debug")
                 currentchild = addChildDevice("hubitat", "Virtual Temperature Sensor", name, null, [name: "${name}", isComponent: true])
             } else {
-                log.debug "Found child for ${name}"
-                log.debug "${currentchild}"
+                log("Found child for ${name}","debug")
+                log("${currentchild}","debug")
             }
         } catch (e) {
-            log.debug "Error adding child ${name}: ${e}"
+            log("Error adding child ${name}: ${e}","debug")
         }
     }
 }
@@ -532,7 +533,7 @@ boolean heatConfigured() {
 }
         
 def hourlyTempUpdater() {
-    def outdoor_temp = settings.outdoor_temp.currentTemperature
+    def outdoor_temp = settings.outdoor_temp.currentTemperature as BigDecimal
     def process = true
     if (state.last_history_update == null) {
         state.last_history_update = (new Date()).format("yyyy-MM-dd HH:mm:ss")
@@ -541,20 +542,48 @@ def hourlyTempUpdater() {
             def now = (new Date())
             def last = (new Date()).parse("yyyy-MM-dd HH:mm:ss",state.last_history_update)
             duration = TimeCategory.minus(now, last)
-            if (duration < 1.hour) {
+            if (duration < 55.minutes) {
+      			log("Not logging temp because it has been less than an hour.","debug")
                 process = false
             }
         }
     }
+    state.last = "Hourly temperature list update"
+    def recreate = false
     if (process) {
-        state.last_temp_history = state.temp_history
         tempArray = state.temp_history
+        if (tempArray== null) {
+   			log("The temp array is null!","debug")
+            tempArray = state.last_temp_history
+            if (tempArray == null) {
+                log("The last temp array is null!","debug")
+                recreate = true
+            }
+        } else {
+            if (tempArray.size == 0) {
+            	log("The temp array is empty!","debug")
+                tempArray = state.last_temp_history
+            	if (tempArray == null) {
+               		log("The last temp array is null!","debug")
+               		recreate = true
+        		}
+            }
+        }
+        if (recreate) {
+            log("Populating with temperature ${outdoor_temp}","debug")
+	        val = [].withEagerDefault() { outdoor_temp as BigDecimal }
+            miscDec= val[167]
+            log("Created new temp array (${val}) with current data (${outdoor_temp})","debug")
+            tempArray = val
+        }
+        
+        state.last_temp_history = state.temp_history
         tempArray.add(outdoor_temp)
-        log.debug "The temp array is ${tempArray}"
+        log("The temp array is ${tempArray}","debug")
         if (tempArray.size > 168) {
-            log.debug "Dropping ${tempArray.size - 168} elements."
+            log("Dropping ${tempArray.size - 168} elements.","debug")
             for (int i in 0..(tempArray.size - 169)) {
-                log.debug "Dropping measurement ${i} - ${tempArray[0]}"
+                log("Dropping measurement ${i} - ${tempArray[0]}","debug")
                 tempArray.remove(0)
             }
         }
@@ -565,48 +594,49 @@ def hourlyTempUpdater() {
 
 
 def indoorHumidityChangeHandler(evt) {
-    log.debug "Running event handler (Indoor humidity) for event ${evt} (${evt.numberValue})."
+    log("Running event handler (Indoor humidity) for event ${evt} (${evt.numberValue}).","debug")
     if (evt.numberValue != null) {
-        state.last = evt
+        state.last = "indoorHumidityChangeHandler: ${evt.name} - ${evt.value}" 
         changeSetpoints()
     }
-    log.debug "Finished event handler."
+    log("Finished event handler.","debug")
     return null
 }
 
 def indoorTempChangeHandler(evt) {
-    log.debug "Running event handler (Indoor temp) for event ${evt} (${evt.numberValue})."
+    log("Running event handler (Indoor temp) for event ${evt} (${evt.numberValue}).","debug")
     if (evt.numberValue != null) {
+        state.last = "indoorTempChangeHandler: ${evt.name} - ${evt.value}"
         changeSetpoints()
     }
-    log.debug "Finished event handler."
+    log("Finished event handler.","debug")
     return null
 }
 def outdoorTempChangeHandler(evt) {
-    log.debug "Running event handler (outdoor temp) for event ${evt} (${evt.numberValue})."
+    log("Running event handler (outdoor temp) for event ${evt} (${evt.numberValue}).","debug")
     if (evt.numberValue != null) {
-        state.last = evt
+        state.last = "outdoorTempChangeHandler: ${evt.name} - ${evt.value}"
         changeSetpoints()
     }
-    log.debug "Finished event handler."
+    log("Finished event handler.","debug")
     return null
 }
 def outdoorHumidityChangeHandler(evt) {
-    log.debug "Running event handler (outdoor humidity) for event ${evt} (${evt.numberValue})."
+    log("Running event handler (outdoor humidity) for event ${evt} (${evt.numberValue}).","debug")
     if (evt.numberValue != null) {
-        state.last = evt
+        state.last = "outdoorHumidityChangeHandler: ${evt.name} - ${evt.value}"
         changeSetpoints()
     }
-    log.debug "Finished event handler."
+    log("Finished event handler.","debug")
     return null
 }
 def outdoorPressureChangeHandler(evt) {
-    log.debug "Running event handler (outdoor pressure) for event ${evt} (${evt.numberValue})."
+    log("Running event handler (outdoor pressure) for event ${evt} (${evt.numberValue}).","debug")
     if (evt.numberValue != null) {
-        state.last = evt
+        state.last = "outdoorPressureChangeHandler: ${evt.name} - ${evt.value}"
         changeSetpoints()
     }
-    log.debug "Finished event handler."
+    log("Finished event handler.","debug")
     return null
 }
 
@@ -631,6 +661,7 @@ def calculateNeutral(String comfort_method, Boolean useOperativeTemp, BigDecimal
             celsius_temps = convert_temp_to_Celsius(state.temp_history)
             tList_p = weighted_running_mean_hourly(celsius_temps,0.8)
             t_p = tList_p[-1]
+            log("temperature list: ${tList_p} ","debug")
             def a_s = 0.1
             switch (comfort_method) {
                 case 'ashrae55':
@@ -660,7 +691,7 @@ void changeSetpoints() {
     comfort = calculateNeutral(settings.comfort_method, settings.useOperativeTemp, settings.adaptive_condition)
     state.neutral = comfort
     for (i in getSetPoints(settings.comfort_method)) {
-        log.debug "Checking for comfort method ${settings.comfort_method} (working on ${i})."
+        log("Checking for comfort method ${settings.comfort_method} (working on ${i}).","debug")
         if (i == "Cooling neutral temperature") {
                 temp = round(convert_temp_if_needed(comfort.cooling),1)
         } else {
@@ -671,14 +702,14 @@ void changeSetpoints() {
         try {
             currentchild = getChildDevice(name)
         } catch (e) {
-            log.debug "Error finding child ${name}: ${e}"
+            log("Error finding child ${name}: ${e}","debug")
         }
         if (currentchild) {
             if (currentchild.currentTemperature as BigDecimal != temp as BigDecimal) {
-                log.debug "Found child device ${currentchild}, sending event for temperature reading ${temp} not matching ${currentchild.currentTemperature}"
+                log("Found child device ${currentchild}, sending event for temperature reading ${temp} not matching ${currentchild.currentTemperature}","debug")
                 currentchild.sendEvent(name: "temperature", value: temp, unit: units, isStateChange: true)
             } else {
-                log.debug "Found child device ${currentchild}, temperature reading ${temp} matches ${currentchild.currentTemperature}, no need to update."
+                log("Found child device ${currentchild}, temperature reading ${temp} matches ${currentchild.currentTemperature}, no need to update.","debug")
             }
         }
     }
@@ -686,17 +717,17 @@ void changeSetpoints() {
 
 def round( ArrayList value, decimals=0 ) {
     def sum
-    log.trace "Rounding: Arraylist ${value}"
+    log("Rounding: Arraylist ${value}","trace")
     value.each {sum += it}
     return (sum == null) ? null : round((sum/value.size).toBigDecimal(),decimals)
 }
 
 def round( value, decimals=0 ) {
-    log.trace "Rounding: ${value}"
+    log("Rounding: ${value}","trace")
     return (value == null) ? null : round(value.toBigDecimal(),decimals)
 }
 def round( BigDecimal value, decimals=0) {
-    log.trace "Rounding: ${value}"
+    log("Rounding: ${value}","trace")
     return (value == null) ? null : value.setScale(decimals, BigDecimal.ROUND_HALF_UP)
 }
 
@@ -746,10 +777,51 @@ def getMultiThermometers() {
 
 // Helper Functions
                     
-void LOG(message, level=3, child=null, logType="debug", event=true, displayEvent=true) {
-    String msg = "${atomicState.appDisplayName} ${message}"
-    if (logType == null) logType = 'debug'
-    log."${logType}" message
+private determineLogLevel(data) {
+    switch (data?.toUpperCase()) {
+        case "TRACE":
+            return 0
+            break
+        case "DEBUG":
+            return 1
+            break
+        case "INFO":
+            return 2
+            break
+        case "WARN":
+            return 3
+            break
+        case "ERROR":
+        	return 4
+            break
+        default:
+            return 1
+    }
+}
+
+public log(data, type) {
+    data = "${appName()} -- ${data ?: ''}"
+    if (determineLogLevel(type) >= determineLogLevel(settings.logging ?: "INFO")) {
+        switch (type?.toUpperCase()) {
+            case "TRACE":
+                log.trace "${data}"
+                break
+            case "DEBUG":
+                log.debug "${data}"
+                break
+            case "INFO":
+                log.info "${data}"
+                break
+            case "WARN":
+                log.warn "${data}"
+                break
+            case "ERROR":
+                log.error "${data}"
+                break
+            default:
+                log.error "${appName()} -- ${device.label} -- Invalid Log Setting"
+        }
+    }
 }
 
 def get_sensorpressure() {
@@ -757,9 +829,9 @@ def get_sensorpressure() {
         app.removeSetting('outdoor_pressure')
         app.removeSetting('pressure_attribute')
     }
-    log.debug "pressure_sensor_type: ${settings.pressure_sensor_type}"
-    log.debug "outdoor_pressure: ${settings?.outdoor_pressure}"
-    log.debug "pressure_attribute: ${settings?.pressure_attribute}"
+    log("pressure_sensor_type: ${settings.pressure_sensor_type}","debug")
+    log("outdoor_pressure: ${settings?.outdoor_pressure}","debug")
+    log("pressure_attribute: ${settings?.pressure_attribute}","debug")
     if (settings.pressure_sensor_type != 'none' && settings?.outdoor_pressure && settings?.pressure_attribute) {
        return settings.outdoor_pressure.currentValue("${settings.pressure_attribute}")*100
     }
@@ -808,18 +880,18 @@ def getPsycoMetricsLocalTemp(Boolean outdoor = true) {
             newMetrics."${key}" = round(value,6)
         }
     }
-    log.debug "metrics: ${newMetrics}"
+    log("metrics: ${newMetrics}","debug")
     return newMetrics
 }
 
 def getPsycoMetrics(Boolean outdoor = true) {
     def atmosPress = (get_pressure()).atmos
-    def temperature = convert_temp_to_Celsius(settings.outdoor_temp.currentTemperature)
+    def temperature = convert_temp_to_Celsius(settings.outdoor_temp.currentTemperature as BigDecimal)
     def humidity = getOutdoorHumidity()
 
     def vel = 0.1
     if (!outdoor) {
-        temperature = convert_temp_to_Celsius(settings.indoorThermostat.currentTemperature)
+        temperature = convert_temp_to_Celsius(settings.indoorThermostat.currentTemperature as BigDecimal)
         humidity = getIndoorHumidity()
     }
     metrics = psychometrics_from_drybulb_rel_humidity(temperature,humidity,atmosPress)
@@ -828,7 +900,7 @@ def getPsycoMetrics(Boolean outdoor = true) {
         metrics.velocity = vel
     }
     metrics.pressure = atmosPress
-    log.debug "metrics: ${metrics}"
+    log("metrics: ${metrics}","debug")
     return metrics
 }
 
@@ -923,7 +995,7 @@ def getNeutralTempPMV(season=0,Boolean operative = false) {
         0.0 - (ashrae_55_point_pmv_ppd(t, t_meanr, humidity, velocity, met, clo).pmv)
         }
     neutral_temp = bisect(tsat_l, tsat_r, fn, eps, 0);
-    log.debug "Neutral temp = ${neutral_temp}"
+    log("Neutral temp = ${neutral_temp}","debug")
     return round(convert_temp_if_needed(neutral_temp),2)
 }
 
@@ -939,7 +1011,7 @@ def getNeutralTempPMV(season=0,Boolean operative = false) {
         a_T = fn.call(a)
         b_T = fn.call(b)
         midpoint_T = fn.call(midpoint)
-        log.trace "${a} (${a_T}), ${b} (${b_T}), midpoint ${midpoint} (${midpoint_T})"
+        log("${a} (${a_T}), ${b} (${b_T}), midpoint ${midpoint} (${midpoint_T})","trace")
         if ((a_T - target) * (midpoint_T - target) < 0) b = midpoint
         else if ((b_T - target) * (midpoint_T - target) < 0) a = midpoint
         else return null
@@ -1054,7 +1126,7 @@ def indoor_WBGT(t_air,t_dew) {
         mcph_1 = mcph_2
         mcph_2 = (e_d - e_w) * (1556 - 1.484 * t_WBGT) + 1010 * (t_air - t_WBGT)
         t_WBGT += 0.2
-        log.trace "WBGT: ${t_WBGT}, mcph_1=${mcph_1}, mcph_2=${mcph_2}"
+        log("WBGT: ${t_WBGT}, mcph_1=${mcph_1}, mcph_2=${mcph_2}","trace")
     }
     return t_WBGT as BigDecimal
 }
@@ -1067,7 +1139,7 @@ def ashrae_55_point_pmv_ppd(t_air, t_meanr, rel_h, vel=0.1, metabolic=1.0, cloth
     // vel, air speed/velocity [m/s]
     // metabolic, metabolic rate (calculated index)
     // clothing, thermal insulation (calculated index)
-    log.debug "Running ashrae_55_point_pmv_ppd with inputs ${t_air}, ${t_meanr}, ${rel_h}, ${vel}, ${metabolic}, ${clothing} "
+    log("Running ashrae_55_point_pmv_ppd with inputs ${t_air}, ${t_meanr}, ${rel_h}, ${vel}, ${metabolic}, ${clothing} ","debug")
 
     def hcn, hc, pmv, n
 
@@ -1127,7 +1199,7 @@ def ashrae_55_point_pmv_ppd(t_air, t_meanr, rel_h, vel=0.1, metabolic=1.0, cloth
     def hl6 = fcl * hc * (tcl - t_air) // heat loss by convection
     def ts = 0.303 * Math.exp(-0.036 * m) + 0.028 // Thermal sensation transfer coefficient
     pmv = ts * (m - hl1 - hl2 - hl3 - hl4 - hl5 - hl6) // Predicted mean vote
-    log.debug "PMV found to be ${round(pmv,2)} at temperature ${round(t_air,2)} with radiant temp of ${round(t_meanr,2)} and relative humidity of ${round(rel_h,2)}."
+    log("PMV found to be ${round(pmv,2)} at temperature ${round(t_air,2)} with radiant temp of ${round(t_meanr,2)} and relative humidity of ${round(rel_h,2)}.","debug")
     ppd = 100.0 - 95.0 * Math.exp(-0.03353 * Math.pow(pmv, 4.0) - 0.2179 * Math.pow(pmv, 2.0));
     return ["pmv": pmv, "ppd": ppd]
 }
@@ -1194,7 +1266,7 @@ def neutral_temperature_conditioned(t_prevail, conditioning, model='EN-15251') {
         inv_conditioning = 1 - conditioning
         t_comf = ((0.09 * conditioning) + (0.33 * inv_conditioning)) * t_prevail + ((22.6 * conditioning) + (18.8 * inv_conditioning))
     } else {
-        log.debug "Model ${model} not recognized: Use EN-15251 or ASHRAE-55"
+        log("Model ${model} not recognized: Use EN-15251 or ASHRAE-55","debug")
     }
     return t_comf
 }
@@ -1281,10 +1353,10 @@ def weighted_running_mean_hourly(outdoor_temperatures, alpha=0.8) {
     //outdoor_temperatures: list of 168 hourly outdoor temperatures in Celcius
     //alpha: A constant between 0 and 1 that governs how quickly the running mean responds to the outdoor temperature.
     if (outdoor_temperatures.size != 168) {
-        log.debug "Have ${outdoor_temperatures.size} temperature measurements. Exiting."
+        log("Have ${outdoor_temperatures.size} temperature measurements. Exiting.","debug")
         return null
     }
-    log.debug "Outdoor temps: ${outdoor_temperatures}"
+    log("Outdoor temps: ${outdoor_temperatures}","debug")
 
     divisor = 1 + alpha + alpha ** 2 + alpha ** 3 + alpha ** 4 + alpha ** 5
     dividend = ((outdoor_temperatures[-24..-1]).sum() / 24) + \
@@ -1310,7 +1382,7 @@ def weighted_running_mean_hourly(outdoor_temperatures, alpha=0.8) {
         prevailing_temp= prevailing_temp + ([daily_run_mean]*24)
         start_hour += 24
     }
-    log.debug "Prevailing hourly temps: ${prevailing_temp}"
+    log("Prevailing hourly temps: ${prevailing_temp}","debug")
     return prevailing_temp
 }
 
@@ -1323,10 +1395,10 @@ def weighted_running_mean_daily(outdoor_temperatures, alpha=0.8){
             daily_mean.add((outdoor_temperatures[start_hour..(start_hour + 23)]).sum() / 24)
     }
     if (daily_mean.size != 7) {
-        log.debug "Only have ${daily_mean.size} temperature measurements. Exiting."
+        log("Only have ${daily_mean.size} temperature measurements. Exiting.","debug")
         return null
     }
-    log.debug "Outdoor temps: ${daily_mean}"
+    log("Outdoor temps: ${daily_mean}","debug")
 
     divisor = 1 + alpha + alpha ** 2 + alpha ** 3 + alpha ** 4 + alpha ** 5
 
@@ -1345,7 +1417,7 @@ def weighted_running_mean_daily(outdoor_temperatures, alpha=0.8){
         daily_run_means.add(daily_run_mean)
         daily_means.add(daily_mean[i])
     }
-    log.debug "${prevailing_temp}"
+    log("${prevailing_temp}","debug")
     return prevailing_temp
 }
 
@@ -1369,7 +1441,7 @@ def universal_thermal_climate_index(t_a, t_r, vel, v_p){
     //rh: Relative humidity [%]
 
     check = ((t_a < -50.0 || t_a > 50.0) || (t_r - t_a < -30.0 || t_r - t_a > 70.0))
-    log.trace "running universal_thermal_climate_index with ${t_a}, ${t_r},  ${vel},  ${v_p}"
+    log("running universal_thermal_climate_index with ${t_a}, ${t_r},  ${vel},  ${v_p}","trace")
     vel = (vel < 0.5) ? 0.5 : vel
     vel = (vel > 17) ? 17 : vel
 
@@ -1606,7 +1678,7 @@ def universal_thermal_climate_index(t_a, t_r, vel, v_p){
         comfortable = "None"
         stressRange = "None"
     }
-    log.debug "UTCI approx is : ${UTCI_approx}"
+    log("UTCI approx is : ${UTCI_approx}","debug")
     return ['utci_approx': UTCI_approx, 'comfortable': comfortable, 'stress_range': stressRange]
 }
 
